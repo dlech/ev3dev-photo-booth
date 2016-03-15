@@ -343,7 +343,7 @@ class Main(object):
         if (1 == self._fb.bits_per_pixel):
             self._write_image(ImageMath.eval('convert(img, "1")', img=Image.open(self._filename)))
         else:
-            self._write_image(ImageMath.eval('convert(img, "RGB")', img=Image.open(self._filename)))
+            self._write_image(img=Image.open(self._filename))
 
     def run(self):
         self._draw_text('Ready!', 36)
