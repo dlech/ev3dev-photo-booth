@@ -3,6 +3,8 @@ ev3dev Photo Booth
 
 A webcam app for LEGO MINDSTORMS EV3 running [ev3dev].
 
+[![Video](http://img.youtube.com/vi/b3qE2un9-HQ/0.jpg)](http://www.youtube.com/watch?v=b3qE2un9-HQ "How to take an ev3dev selfie")
+
 [ev3dev]: http://www.ev3dev.org
 
 
