@@ -35,9 +35,10 @@ from fcntl import ioctl
 from subprocess import Popen
 from PIL import Image, ImageDraw, ImageFont, ImageMath
 from selectors import DefaultSelector, EVENT_READ
-from time import sleep
 from sys import stderr
 from errno import *
+from struct import pack, unpack
+import time
 import contextlib
 
 class Framebuffer(object):
@@ -278,12 +279,30 @@ class Main(object):
         for device in devices:
             self._selector.register(device, EVENT_READ)
 
+    def _color565(self, r, g, b):
+        """Convert red, green, blue components to a 16-bit 565 RGB value. Components
+        should be values 0 to 255.
+        """
+        return (((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3))
+
+    def _img_to_rgb565_bytes(self):
+        pixels = [self._color565(r, g, b) for (r, g, b) in self._img.getdata()]
+        return pack('H' * len(pixels), *pixels)
+
     def _write_image(self, img):
-        image_bytes = img.tobytes("raw", "1;IR", self._fb.line_length)
+        if (1 == self._fb.bits_per_pixel):
+            image_bytes = img.tobytes("raw", "1;IR", self._fb.line_length)
+        else:
+            self._img = img
+            image_bytes = self._img_to_rgb565_bytes()
         self._fb.write_raw(image_bytes)
 
     def _do_countdown(self):
-        img = Image.new("1", self._fb.resolution, 1)
+        if (1 == self._fb.bits_per_pixel):
+            img = Image.new("1", self._fb.resolution, 1)
+        else:
+            img = Image.new("RGB", self._fb.resolution, 'black')
+
         fnt = ImageFont.truetype(font="/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size=96)
         d = ImageDraw.Draw(img)
         for i in range(3, 0, -1):
@@ -296,10 +315,13 @@ class Main(object):
             d.text((x, y), str(i), font=fnt)
             self._write_image(img)
             # give some time to read
-            sleep(1.25)
+            time.sleep(1.25)
 
     def _draw_text(self, text, size):
-        img = Image.new("1", self._fb.resolution, 1)
+        if (1 == self._fb.bits_per_pixel):
+            img = Image.new("1", self._fb.resolution, 1)
+        else:
+            img = Image.new("RGB", self._fb.resolution, 'black')
         fnt = ImageFont.truetype(font="/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size=size)
         d = ImageDraw.Draw(img)
         text_width, text_height = d.textsize(text, font=fnt)
@@ -313,12 +335,15 @@ class Main(object):
         args += ' --scale {0}x{1}'.format(self._fb.resolution.x, self._fb.resolution.y)
         if self._fb.grayscale or self._fb.bits_per_pixel == 1:
             args += ' --greyscale'
-        args += ' --png --save raw.png'
+        args += ' --png --save {0}'.format(self._filename)
         fswebcam = Popen(args, shell=True)
         fswebcam.wait()
 
     def _show_picture(self):
-        self._write_image(ImageMath.eval('convert(img, "1")', img=Image.open('raw.png')))
+        if (1 == self._fb.bits_per_pixel):
+            self._write_image(ImageMath.eval('convert(img, "1")', img=Image.open(self._filename)))
+        else:
+            self._write_image(img=Image.open(self._filename))
 
     def run(self):
         self._draw_text('Ready!', 36)
@@ -337,6 +362,7 @@ class Main(object):
                         # enter button or camera button takes a picture
                         self._do_countdown()
                         self._draw_text('Cheese!', 36)
+                        self._filename = 'raw-{0}.png'.format(time.strftime("%Y%m%d-%H%M%S"))
                         self._take_picture()
                         self._draw_text('Please wait...', 24)
                         self._show_picture()
@@ -363,3 +389,4 @@ if __name__ == '__main__':
             exit(1)
         # other errors are unexpected
         raise e
+
